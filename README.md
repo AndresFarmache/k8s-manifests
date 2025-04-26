@@ -1,70 +1,206 @@
 # Kubernetes Manifests
-Requisitos previos
-Antes de comenzar, asegúrate de tener instalados y configurados los siguientes requisitos:
 
-Minikube: Para crear el clúster de Kubernetes local.
 
-kubectl: La herramienta de línea de comandos para interactuar con Kubernetes.
 
-Git: Para gestionar los repositorios y la integración con GitHub.
+## 🧱 Requisitos
 
-Instalación de Minikube y kubectl:
-Instalar Minikube: Sigue las instrucciones en la documentación oficial de Minikube.
+- Docker instalado y en funcionamiento
+- Git
+- Minikube instalado
+- kubectl instalado
+- Acceso a una cuenta de GitHub
 
-Instalar kubectl: Sigue las instrucciones en la documentación oficial de kubectl.
+---
 
-Iniciar Minikube
+## 📁 Estructura de Carpetas
 
-Inicia Minikube ejecutando el siguiente comando:
+```bash
+minikube-devops/
+├── web-static/           # Repositorio con el contenido de la web
+└── k8s-manifests/        # Repositorio con los manifiestos de Kubernetes
+```
 
+---
+
+## 🚀 Paso a paso
+
+### 1. Fork y clonación del sitio web
+
+1. Ingresar a [https://github.com/ewojjowe/static-website](https://github.com/ewojjowe/static-website)
+2. Hacer click en el botón **Fork** y seleccioná tu cuenta.
+3. Cloná el fork a tu máquina local:
+
+```bash
+cd ~/Documentos/minikube-devops
+git clone https://github.com/TU_USUARIO/web-static.git
+```
+
+4. Personalizá el contenido HTML/CSS según desees.
+5. Versioná los cambios:
+
+```bash
+cd web-static
+git add .
+git commit -m "Personalización del contenido estático"
+git push origin main (si main no funciona, probar con master)
+```
+
+---
+
+### 2. Crear el repositorio para los manifiestos
+
+1. Crear en GitHub un nuevo repositorio llamado `k8s-manifests`.
+2. Clonarlo en la carpeta principal del proyecto:
+
+```bash
+cd ~/Documentos/minikube-devops
+git clone https://github.com/TU_USUARIO/k8s-manifests.git
+```
+
+---
+
+### 3. Iniciar Minikube
+
+```bash
 minikube start
+```
 
-Este comando configurará y levantará un clúster de Kubernetes local.
+Podés verificar que el clúcster esté corriendo con:
 
-Desplegar el entorno:
+```bash
+kubectl get nodes
+```
 
-Clona este repositorio en tu máquina local:
+---
 
+### 4. Crear recursos Kubernetes
 
-git clone https://github.com/AndresFarmache/k8s-manifests
+Dentro del directorio `k8s-manifests/`, organizá los manifiestos en carpetas:
 
-cd minikube-devops/k8s-manifests
+```bash
+mkdir -p persistentvolume persistentvolumeclaim deployment service
+```
 
-Aplica los manifiestos para crear los recursos necesarios en Kubernetes:
+#### a. PersistentVolume
 
+Archivo: `persistentvolume/pv-web-content.yaml`
 
-kubectl apply -f deployment/web-deployment.yaml
-kubectl apply -f persistentvolumeclaim/pvc-web-content.yaml
+```yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-web-content
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/home/TU_USUARIO/Documentos/minikube-devops/web-static"
+```
+
+#### b. PersistentVolumeClaim
+
+Archivo: `persistentvolumeclaim/pvc-web-content.yaml`
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-web-content
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+```
+
+#### c. Deployment
+
+Archivo: `deployment/web-deployment.yaml`
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:latest
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: web-content
+              mountPath: /usr/share/nginx/html
+      volumes:
+        - name: web-content
+          persistentVolumeClaim:
+            claimName: pvc-web-content
+```
+
+#### d. Service
+
+Archivo: `service/web-service.yaml`
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-service
+spec:
+  type: NodePort
+  selector:
+    app: web
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 30036
+```
+
+---
+
+### 5. Aplicar los manifiestos
+
+```bash
 kubectl apply -f persistentvolume/pv-web-content.yaml
+kubectl apply -f persistentvolumeclaim/pvc-web-content.yaml
+kubectl apply -f deployment/web-deployment.yaml
 kubectl apply -f service/web-service.yaml
-Estos comandos crean un Deployment para el contenedor de Nginx, un PersistentVolumeClaim para el almacenamiento persistente, y un Service para exponer la aplicación.
+```
 
-Verifica que los recursos estén desplegados correctamente:
+Verificá que todo esté funcionando:
 
-
+```bash
 kubectl get pods
-kubectl get services
-Los pods deben estar en estado Running, y el servicio debe estar expuesto correctamente.
+kubectl get svc
+```
 
-Acceder a la aplicación
-Para acceder a la aplicación desde tu navegador, utiliza el siguiente comando para obtener la URL:
+---
 
-minikube service web-service --url
-Esto te proporcionará una URL que podrás abrir en tu navegador. La aplicación servirá el contenido estático desde el volumen persistente.
+### 6. Acceder al sitio desde el navegador
 
-Personalización del contenido
-El contenido de la página web estático está basado en un repositorio de GitHub. Puedes personalizarlo siguiendo estos pasos:
+Usá el siguiente comando para abrir el sitio:
 
-Realiza un fork del repositorio static-website en tu cuenta de GitHub.
+```bash
+minikube service web-service
+```
 
-Clónalo en tu máquina local:
+También podés acceder directamente con la URL que se muestra, por ejemplo:
 
+```
+http://127.0.0.1:30036
+```
 
-Información adicional
-El entorno usa Nginx como servidor web para servir el contenido estático.
-
-El PersistentVolume se monta desde un directorio local y es usado para almacenar el contenido de la página web de forma persistente incluso si los pods son reiniciados.
-
-El entorno fue diseñado para ser accesible localmente a través de Minikube, lo que permite a los desarrolladores trabajar en un entorno de pruebas realista.
-
+---
 
